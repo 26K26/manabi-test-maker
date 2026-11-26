@@ -1,0 +1,6 @@
+const DB='manabi-test-maker-v2',STORE='vault',ID='main';
+let opening;
+function db(){if(!opening)opening=new Promise((resolve,reject)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE);r.onsuccess=()=>{r.result.onversionchange=()=>r.result.close();resolve(r.result);};r.onerror=()=>reject(r.error);r.onblocked=()=>reject(Error('他のタブを閉じてください'));});return opening;}
+export async function readVault(){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction(STORE,'readonly'),r=tx.objectStore(STORE).get(ID);r.onsuccess=()=>resolve(r.result??null);r.onerror=()=>reject(r.error);});}
+// Compare and replace in ONE read/write transaction. Prevent stale tabs overwriting.
+export async function writeVault(envelope,expected){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction(STORE,'readwrite'),s=tx.objectStore(STORE),r=s.get(ID);let result,conflict=false;r.onsuccess=()=>{const previous=r.result??null;if((previous?.revision??null)!==expected){conflict=true;tx.abort();return;}result={revision:crypto.randomUUID(),envelope,updatedAt:new Date().toISOString()};s.put(result,ID);};tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(Error(conflict?'CONFLICT': '保管庫の保存に失敗しました'));tx.onerror=()=>reject(tx.error);});}
